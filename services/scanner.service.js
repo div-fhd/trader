@@ -5,6 +5,7 @@ const telegram = require("./telegram.service");
 const Signal = require("../models/Signal");
 const symbols = require("../utils/symbols");
 const { calculateSignalScore } = require("./scoring.service");
+const limiter = require("../utils/dailyLimiter");
 
 function passesPreFilter(indicators) {
   if (!indicators.ema50 || !indicators.ema200 || !indicators.rsi) return false;
