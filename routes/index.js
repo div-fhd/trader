@@ -12,6 +12,15 @@ router.get('/', function(req, res, next) {
   res.render('index', { title: 'Express' });
 });
 
+ 
+const { getLogs } = require("../utils/liveLogs");
+
+// router.get("/logs", function (req, res) {
+//   res.json({
+//     logs: getLogs()
+//   });
+// });
+
 router.get("/signals", async function (req, res) {
   const signals = await Signal.find().sort({ createdAt: -1 });
   res.json(signals);

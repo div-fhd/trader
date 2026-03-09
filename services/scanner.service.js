@@ -8,18 +8,29 @@ const { calculateSignalScore } = require("./scoring.service");
 const limiter = require("../utils/dailyLimiter");
 
 function passesPreFilter(indicators) {
-  if (!indicators.ema50 || !indicators.ema200 || !indicators.rsi) return false;
+  if (!indicators.ema50 || !indicators.ema200 || !indicators.rsi || !indicators.currentClose) {
+    return false;
+  }
 
   const { currentClose, ema50, ema200, rsi } = indicators;
 
   const distanceFromEMA200 = Math.abs(currentClose - ema200) / currentClose * 100;
+  const distanceFromEMA50 = Math.abs(currentClose - ema50) / currentClose * 100;
 
-  if (distanceFromEMA200 < 0.2) return false;
-  if (rsi < 35 || rsi > 65) return false;
+  // لازم السوق يكون أوضح
+  if (distanceFromEMA200 < 0.5) return false;
+
+  // لا نريد سعر بعيد جدًا
+  if (distanceFromEMA200 > 4) return false;
+
+  // لا نريد حركة ميتة حول EMA50
+  if (distanceFromEMA50 < 0.15) return false;
+
+  // RSI نخليه في منطقة أنظف
+  if (rsi < 40 || rsi > 60) return false;
 
   return true;
 }
-
 async function scanMarket() {
   console.log("🔎 Scanning market...");
 

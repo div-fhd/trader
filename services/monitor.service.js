@@ -1,7 +1,7 @@
 const Signal = require("../models/Signal");
 const binance = require("./binance.service");
 const telegram = require("./telegram.service");
-
+const { addLog } = require("../utils/liveLogs");
 function isInEntryZone(price, entryMin, entryMax) {
   return price >= entryMin && price <= entryMax;
 }
@@ -21,7 +21,7 @@ for (const signal of signals) {
     console.log(
       `🔍 ${signal.symbol} | status=${signal.status} | price=${currentPrice} | entry=${signal.entryMin}-${signal.entryMax}`
     );
-
+    addLog(`🔵 ${signal.symbol} | status=${signal.status} | price=${currentPrice} | entry=${signal.entryMin}-${signal.entryMax}`);
     if (
       signal.status === "SENT" &&
       !signal.entryAlertSent &&

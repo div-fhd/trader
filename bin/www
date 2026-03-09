@@ -8,6 +8,7 @@ var http = require("http");
 var connectDB = require("../config/db");
 var scanJob = require("../jobs/scan.job");
 var monitorJob = require("../jobs/monitor.job");
+const heartbeat = require("../jobs/heartbeat.job");
 
 var port = normalizePort(process.env.PORT || "3000");
 app.set("port", port);
@@ -25,6 +26,7 @@ async function startServer() {
   monitorJob.startMonitor();
 
   console.log("🚀 Jobs started");
+  heartbeat.startHeartbeat();
 }
 
 startServer();

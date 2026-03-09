@@ -17,7 +17,7 @@ function startMonitor() {
     } finally {
       isRunning = false;
     }
-  }, 10000);
+  }, 50000);
 }
 
 module.exports = {

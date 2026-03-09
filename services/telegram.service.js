@@ -119,9 +119,20 @@ async function sendStopLossAlert(signal, currentPrice) {
 
   await sendMessage(message);
 }
+async function sendMessage(message) {
+  try {
+    const result = await bot.sendMessage(process.env.TELEGRAM_CHAT_ID, message);
+    console.log("📬 Telegram message sent");
+    return result;
+  } catch (error) {
+    console.log("❌ Telegram send error:", error.message);
+    throw error;
+  }
+}
 
 module.exports = {
   sendSignal,
+  sendMessage,
   sendEntryAlert,
   sendTp1Alert,
   sendTp2Alert,

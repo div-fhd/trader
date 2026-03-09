@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Logs</title>
+<style>
+body{
+  background:#111;
+  color:#0f0;
+  font-family:monospace;
+  padding:20px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Server Logs</h2>
+
+<pre id="logs">Loading...</pre>
+
+<script>
+fetch("/logs")
+.then(res => res.text())
+.then(data => {
+  document.getElementById("logs").textContent = data;
+});
+</script>
+
+</body>
+</html>
