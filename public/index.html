@@ -14,17 +14,9 @@ body{
 
 <body>
 
-<h2>Server Logs</h2>
+<h2>Server Live</h2>
 
-<pre id="logs">Loading...</pre>
 
-<script>
-fetch("/logs")
-.then(res => res.text())
-.then(data => {
-  document.getElementById("logs").textContent = data;
-});
-</script>
-
+ 
 </body>
 </html>
