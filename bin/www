@@ -9,6 +9,8 @@ var connectDB = require("../config/db");
 var scanJob = require("../jobs/scan.job");
 var monitorJob = require("../jobs/monitor.job");
 const heartbeat = require("../jobs/heartbeat.job");
+const telegram = require("../services/telegram.service");
+const { startTelegramBot } = require("../services/telegram.bot");
 
 var port = normalizePort(process.env.PORT || "3000");
 app.set("port", port);
@@ -23,8 +25,11 @@ async function startServer() {
   server.on("listening", onListening);
 
   scanJob.startScanner();
+  
   monitorJob.startMonitor();
+  startTelegramBot();
 
+  telegram.sendMainMenu().catch(console.error);
   console.log("🚀 Jobs started");
   heartbeat.startHeartbeat();
 }

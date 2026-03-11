@@ -14,25 +14,19 @@ function passesPreFilter(indicators) {
 
   const { currentClose, ema50, ema200, rsi } = indicators;
 
-  const distanceFromEMA200 = Math.abs(currentClose - ema200) / currentClose * 100;
-  const distanceFromEMA50 = Math.abs(currentClose - ema50) / currentClose * 100;
+  const distanceFromEMA200 = (Math.abs(currentClose - ema200) / currentClose) * 100;
+  const distanceFromEMA50 = (Math.abs(currentClose - ema50) / currentClose) * 100;
 
-  // لازم السوق يكون أوضح
   if (distanceFromEMA200 < 0.5) return false;
-
-  // لا نريد سعر بعيد جدًا
   if (distanceFromEMA200 > 4) return false;
-
-  // لا نريد حركة ميتة حول EMA50
   if (distanceFromEMA50 < 0.15) return false;
-
-  // RSI نخليه في منطقة أنظف
   if (rsi < 40 || rsi > 60) return false;
 
   return true;
 }
-async function scanMarket() {
-  console.log("🔎 Scanning market...");
+
+async function scanMarket(limit = 3, sessionKey = null, options = {}) {
+  console.log(`🔎 Scanning market...`);
 
   const candidateSignals = [];
 
@@ -86,12 +80,14 @@ async function scanMarket() {
 
   if (!candidateSignals.length) {
     console.log("📭 No candidate signals found");
-    return;
+    return 0;
   }
 
   candidateSignals.sort((a, b) => b.score - a.score);
 
-  const topSignals = candidateSignals.slice(0, 3);
+  const topSignals = candidateSignals.slice(0, limit);
+
+  let sentCount = 0;
 
   for (const item of topSignals) {
     const existingOpenSignal = await Signal.findOne({
@@ -122,8 +118,11 @@ async function scanMarket() {
       rr: item.rr
     });
 
+    sentCount++;
     console.log(`🚨 TOP SIGNAL SENT: ${item.symbol} | score=${item.score}`);
   }
+
+  return sentCount;
 }
 
 module.exports = {

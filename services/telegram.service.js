@@ -1,7 +1,7 @@
 const TelegramBot = require("node-telegram-bot-api");
 
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
-
+const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN,{polling: true});
+ 
 async function sendMessage(message) {
   return bot.sendMessage(process.env.TELEGRAM_CHAT_ID, message);
 }
@@ -129,13 +129,32 @@ async function sendMessage(message) {
     throw error;
   }
 }
+ 
+async function sendMainMenu() {
+  return bot.sendMessage(
+    process.env.TELEGRAM_CHAT_ID,
+    "تم تفعيل لوحة التحكم ✅",
+    {
+      reply_markup: {
+      keyboard: [
+        [{ text: "📡 فحص السوق الآن" }],
+        [{ text: "📊 الصفقات المفتوحة" }]
+      ],
+      resize_keyboard: true
+    }
+    }
+  );
+}
 
+ 
 module.exports = {
+  bot,
   sendSignal,
   sendMessage,
   sendEntryAlert,
   sendTp1Alert,
   sendTp2Alert,
   sendTp3Alert,
-  sendStopLossAlert
+  sendStopLossAlert,
+  sendMainMenu
 };

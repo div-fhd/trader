@@ -2,8 +2,45 @@ const Signal = require("../models/Signal");
 const binance = require("./binance.service");
 const telegram = require("./telegram.service");
 const { addLog } = require("../utils/liveLogs");
+
 function isInEntryZone(price, entryMin, entryMax) {
   return price >= entryMin && price <= entryMax;
+}
+
+function isEntryTriggered(signal, currentPrice) {
+  if (signal.direction === "LONG") {
+    return (
+      isInEntryZone(currentPrice, signal.entryMin, signal.entryMax) ||
+      currentPrice > signal.entryMax
+    );
+  }
+
+  if (signal.direction === "SHORT") {
+    return (
+      isInEntryZone(currentPrice, signal.entryMin, signal.entryMax) ||
+      currentPrice < signal.entryMin
+    );
+  }
+
+  return false;
+}
+
+async function markEntryIfNeeded(signal, currentPrice) {
+  if (signal.entryAlertSent) return false;
+  if (signal.status !== "SENT") return false;
+
+  if (!isEntryTriggered(signal, currentPrice)) {
+    return false;
+  }
+
+  signal.entryAlertSent = true;
+  signal.status = "ENTRY_HIT";
+  await signal.save();
+
+  await telegram.sendEntryAlert(signal, currentPrice);
+  console.log(`📡 ENTRY HIT: ${signal.symbol}`);
+
+  return true;
 }
 
 async function monitorSignals() {
@@ -13,28 +50,23 @@ async function monitorSignals() {
     status: { $in: ["SENT", "ENTRY_HIT", "TP1_HIT", "TP2_HIT"] }
   });
 
-for (const signal of signals) {
-  try {
-    const currentPrice = await binance.getPrice(signal.symbol);
-    signal.currentPrice = currentPrice;
+  for (const signal of signals) {
+    try {
+      const currentPrice = await binance.getPrice(signal.symbol);
+      signal.currentPrice = currentPrice;
 
-    console.log(
-      `🔍 ${signal.symbol} | status=${signal.status} | price=${currentPrice} | entry=${signal.entryMin}-${signal.entryMax}`
-    );
-    addLog(`🔵 ${signal.symbol} | status=${signal.status} | price=${currentPrice} | entry=${signal.entryMin}-${signal.entryMax}`);
-    if (
-      signal.status === "SENT" &&
-      !signal.entryAlertSent &&
-      isInEntryZone(currentPrice, signal.entryMin, signal.entryMax)
-    ) {
-      signal.entryAlertSent = true;
-      signal.status = "ENTRY_HIT";
-      await signal.save();
+      console.log(
+        `🔍 ${signal.symbol} | status=${signal.status} | price=${currentPrice} | entry=${signal.entryMin}-${signal.entryMax}`
+      );
 
-      await telegram.sendEntryAlert(signal, currentPrice);
-      console.log(`📡 ENTRY HIT: ${signal.symbol}`);
-      continue;
-    }
+      // 1) أول شيء: تأكيد الدخول إذا لزم
+      await markEntryIfNeeded(signal, currentPrice);
+
+      // 2) لا نكمل أهداف أو ستوب إلا إذا الدخول تحقق
+      if (!signal.entryAlertSent) {
+        await signal.save();
+        continue;
+      }
 
       // LONG LOGIC
       if (signal.direction === "LONG") {
