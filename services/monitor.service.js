@@ -1,43 +1,40 @@
 const Signal = require("../models/Signal");
 const binance = require("./binance.service");
 const telegram = require("./telegram.service");
-const { addLog } = require("../utils/liveLogs");
 
-function isInEntryZone(price, entryMin, entryMax) {
-  return price >= entryMin && price <= entryMax;
+function hasTouchedEntryZone(candle, entryMin, entryMax) {
+  return candle.low <= entryMax && candle.high >= entryMin;
 }
 
-function isEntryTriggered(signal, currentPrice) {
-  if (signal.direction === "LONG") {
-    return (
-      isInEntryZone(currentPrice, signal.entryMin, signal.entryMax) ||
-      currentPrice > signal.entryMax
-    );
-  }
+async function getLatestCandle(symbol) {
+  const candles = await binance.getKlines(symbol, "1m", 2);
+  const last = candles[candles.length - 1];
 
-  if (signal.direction === "SHORT") {
-    return (
-      isInEntryZone(currentPrice, signal.entryMin, signal.entryMax) ||
-      currentPrice < signal.entryMin
-    );
-  }
-
-  return false;
+  return {
+    high: Number(last.high),
+    low: Number(last.low),
+    close: Number(last.close)
+  };
 }
 
-async function markEntryIfNeeded(signal, currentPrice) {
+async function markEntryIfNeeded(signal, candle) {
   if (signal.entryAlertSent) return false;
   if (signal.status !== "SENT") return false;
 
-  if (!isEntryTriggered(signal, currentPrice)) {
-    return false;
-  }
+  const touchedEntry = hasTouchedEntryZone(
+    candle,
+    signal.entryMin,
+    signal.entryMax
+  );
+
+  if (!touchedEntry) return false;
 
   signal.entryAlertSent = true;
   signal.status = "ENTRY_HIT";
+  signal.currentPrice = candle.close;
   await signal.save();
 
-  await telegram.sendEntryAlert(signal, currentPrice);
+  await telegram.sendEntryAlert(signal, candle.close);
   console.log(`📡 ENTRY HIT: ${signal.symbol}`);
 
   return true;
@@ -52,103 +49,111 @@ async function monitorSignals() {
 
   for (const signal of signals) {
     try {
-      const currentPrice = await binance.getPrice(signal.symbol);
-      signal.currentPrice = currentPrice;
+      const candle = await getLatestCandle(signal.symbol);
+      signal.currentPrice = candle.close;
 
       console.log(
-        `🔍 ${signal.symbol} | status=${signal.status} | price=${currentPrice} | entry=${signal.entryMin}-${signal.entryMax}`
+        `🔍 ${signal.symbol} | status=${signal.status} | close=${candle.close} | high=${candle.high} | low=${candle.low} | entry=${signal.entryMin}-${signal.entryMax}`
       );
 
-      // 1) أول شيء: تأكيد الدخول إذا لزم
-      await markEntryIfNeeded(signal, currentPrice);
+      // دخول فعلي فقط عند لمس منطقة الدخول
+      await markEntryIfNeeded(signal, candle);
 
-      // 2) لا نكمل أهداف أو ستوب إلا إذا الدخول تحقق
+      // لا نكمل إذا الدخول لم يتحقق
       if (!signal.entryAlertSent) {
         await signal.save();
         continue;
       }
 
-      // LONG LOGIC
+      // LONG
       if (signal.direction === "LONG") {
-        if (!signal.tp1Hit && currentPrice >= signal.targets[0]) {
+        if (!signal.tp1Hit && candle.high >= signal.targets[0]) {
           signal.tp1Hit = true;
           signal.status = "TP1_HIT";
+          signal.currentPrice = candle.close;
           await signal.save();
 
-          await telegram.sendTp1Alert(signal, currentPrice);
+          await telegram.sendTp1Alert(signal, candle.close);
           console.log(`🎯 TP1 HIT: ${signal.symbol}`);
           continue;
         }
 
-        if (signal.tp1Hit && !signal.tp2Hit && currentPrice >= signal.targets[1]) {
+        if (signal.tp1Hit && !signal.tp2Hit && candle.high >= signal.targets[1]) {
           signal.tp2Hit = true;
           signal.status = "TP2_HIT";
+          signal.currentPrice = candle.close;
           await signal.save();
 
-          await telegram.sendTp2Alert(signal, currentPrice);
+          await telegram.sendTp2Alert(signal, candle.close);
           console.log(`🚀 TP2 HIT: ${signal.symbol}`);
           continue;
         }
 
-        if (signal.tp2Hit && !signal.tp3Hit && currentPrice >= signal.targets[2]) {
+        if (signal.tp2Hit && !signal.tp3Hit && candle.high >= signal.targets[2]) {
           signal.tp3Hit = true;
           signal.status = "CLOSED";
+          signal.currentPrice = candle.close;
           await signal.save();
 
-          await telegram.sendTp3Alert(signal, currentPrice);
+          await telegram.sendTp3Alert(signal, candle.close);
           console.log(`🏁 TP3 HIT: ${signal.symbol}`);
           continue;
         }
 
-        if (!signal.stopLossHit && currentPrice <= signal.stopLoss) {
+        if (!signal.stopLossHit && candle.low <= signal.stopLoss) {
           signal.stopLossHit = true;
           signal.status = "STOPPED";
+          signal.currentPrice = candle.close;
           await signal.save();
 
-          await telegram.sendStopLossAlert(signal, currentPrice);
+          await telegram.sendStopLossAlert(signal, candle.close);
           console.log(`❌ STOP LOSS HIT: ${signal.symbol}`);
           continue;
         }
       }
 
-      // SHORT LOGIC
+      // SHORT
       if (signal.direction === "SHORT") {
-        if (!signal.tp1Hit && currentPrice <= signal.targets[0]) {
+        if (!signal.tp1Hit && candle.low <= signal.targets[0]) {
           signal.tp1Hit = true;
           signal.status = "TP1_HIT";
+          signal.currentPrice = candle.close;
           await signal.save();
 
-          await telegram.sendTp1Alert(signal, currentPrice);
+          await telegram.sendTp1Alert(signal, candle.close);
           console.log(`🎯 TP1 HIT: ${signal.symbol}`);
           continue;
         }
 
-        if (signal.tp1Hit && !signal.tp2Hit && currentPrice <= signal.targets[1]) {
+        if (signal.tp1Hit && !signal.tp2Hit && candle.low <= signal.targets[1]) {
           signal.tp2Hit = true;
           signal.status = "TP2_HIT";
+          signal.currentPrice = candle.close;
           await signal.save();
 
-          await telegram.sendTp2Alert(signal, currentPrice);
+          await telegram.sendTp2Alert(signal, candle.close);
           console.log(`🚀 TP2 HIT: ${signal.symbol}`);
           continue;
         }
 
-        if (signal.tp2Hit && !signal.tp3Hit && currentPrice <= signal.targets[2]) {
+        if (signal.tp2Hit && !signal.tp3Hit && candle.low <= signal.targets[2]) {
           signal.tp3Hit = true;
           signal.status = "CLOSED";
+          signal.currentPrice = candle.close;
           await signal.save();
 
-          await telegram.sendTp3Alert(signal, currentPrice);
+          await telegram.sendTp3Alert(signal, candle.close);
           console.log(`🏁 TP3 HIT: ${signal.symbol}`);
           continue;
         }
 
-        if (!signal.stopLossHit && currentPrice >= signal.stopLoss) {
+        if (!signal.stopLossHit && candle.high >= signal.stopLoss) {
           signal.stopLossHit = true;
           signal.status = "STOPPED";
+          signal.currentPrice = candle.close;
           await signal.save();
 
-          await telegram.sendStopLossAlert(signal, currentPrice);
+          await telegram.sendStopLossAlert(signal, candle.close);
           console.log(`❌ STOP LOSS HIT: ${signal.symbol}`);
           continue;
         }

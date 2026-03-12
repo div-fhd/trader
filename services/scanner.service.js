@@ -5,10 +5,14 @@ const telegram = require("./telegram.service");
 const Signal = require("../models/Signal");
 const symbols = require("../utils/symbols");
 const { calculateSignalScore } = require("./scoring.service");
-const limiter = require("../utils/dailyLimiter");
 
 function passesPreFilter(indicators) {
-  if (!indicators.ema50 || !indicators.ema200 || !indicators.rsi || !indicators.currentClose) {
+  if (
+    !indicators.ema50 ||
+    !indicators.ema200 ||
+    !indicators.rsi ||
+    !indicators.currentClose
+  ) {
     return false;
   }
 
@@ -25,8 +29,36 @@ function passesPreFilter(indicators) {
   return true;
 }
 
+function isMissedSignal(signal, currentPrice) {
+  if (signal.direction === "LONG" && currentPrice > signal.entryMax) {
+    return true;
+  }
+
+  if (signal.direction === "SHORT" && currentPrice < signal.entryMin) {
+    return true;
+  }
+
+  return false;
+}
+
+function isPriceNearEntry(signal, currentPrice) {
+  const threshold = 0.02; // 2%
+
+  if (signal.direction === "LONG") {
+    const distance = (signal.entryMin - currentPrice) / signal.entryMin;
+    return distance <= threshold;
+  }
+
+  if (signal.direction === "SHORT") {
+    const distance = (currentPrice - signal.entryMax) / signal.entryMax;
+    return distance <= threshold;
+  }
+
+  return true;
+}
+
 async function scanMarket(limit = 3, sessionKey = null, options = {}) {
-  console.log(`🔎 Scanning market...`);
+  console.log("🔎 Scanning market...");
 
   const candidateSignals = [];
 
@@ -56,12 +88,32 @@ async function scanMarket(limit = 3, sessionKey = null, options = {}) {
         ...indicators
       });
 
-      if (!signal.shouldTrade) {
+      if (!signal || !signal.shouldTrade) {
         console.log(`❌ No trade for ${symbol}`);
         continue;
       }
 
+      if (isMissedSignal(signal, indicators.currentClose)) {
+        console.log(`⌛ Missed signal ${symbol}, current price already passed entry zone`);
+        continue;
+      }
+
+      if (!isPriceNearEntry(signal, indicators.currentClose)) {
+        console.log(`📏 Price too far from entry ${symbol}`);
+        continue;
+      }
+
       const { score, rr } = calculateSignalScore(signal, indicators);
+
+      if (!score || score < 70) {
+        console.log(`🏚️ Weak score ${symbol} | score=${score}`);
+        continue;
+      }
+
+      if (!rr || rr < 1.5) {
+        console.log(`⚠️ Weak RR ${symbol} | rr=${rr}`);
+        continue;
+      }
 
       candidateSignals.push({
         symbol,
@@ -90,36 +142,45 @@ async function scanMarket(limit = 3, sessionKey = null, options = {}) {
   let sentCount = 0;
 
   for (const item of topSignals) {
-    const existingOpenSignal = await Signal.findOne({
-      symbol: item.symbol,
-      status: { $in: ["SENT", "ENTRY_HIT", "TP1_HIT", "TP2_HIT"] }
-    });
+    try {
+      const existingOpenSignal = await Signal.findOne({
+        symbol: item.symbol,
+        status: { $in: ["SENT", "ENTRY_HIT", "TP1_HIT", "TP2_HIT"] }
+      });
 
-    if (existingOpenSignal) continue;
+      if (existingOpenSignal) continue;
 
-    const newSignal = await Signal.create({
-      symbol: item.symbol,
-      timeframe: item.timeframe,
-      shouldTrade: item.signal.shouldTrade,
-      direction: item.signal.direction,
-      entryMin: item.signal.entryMin,
-      entryMax: item.signal.entryMax,
-      stopLoss: item.signal.stopLoss,
-      targets: item.signal.targets,
-      confidence: item.signal.confidence,
-      summary: item.signal.summary,
-      status: "SENT",
-      currentPrice: item.indicators.currentClose
-    });
+      const newSignal = await Signal.create({
+        symbol: item.symbol,
+        timeframe: item.timeframe,
+        shouldTrade: item.signal.shouldTrade,
+        direction: item.signal.direction,
+        entryMin: item.signal.entryMin,
+        entryMax: item.signal.entryMax,
+        stopLoss: item.signal.stopLoss,
+        targets: item.signal.targets,
+        confidence: item.signal.confidence,
+        summary: item.signal.summary,
+        status: "SENT",
+        currentPrice: item.indicators.currentClose,
+        entryAlertSent: false,
+        tp1Hit: false,
+        tp2Hit: false,
+        tp3Hit: false,
+        stopLossHit: false
+      });
 
-    await telegram.sendSignal({
-      ...newSignal.toObject(),
-      score: item.score,
-      rr: item.rr
-    });
+      await telegram.sendSignal({
+        ...newSignal.toObject(),
+        score: item.score,
+        rr: item.rr
+      });
 
-    sentCount++;
-    console.log(`🚨 TOP SIGNAL SENT: ${item.symbol} | score=${item.score}`);
+      sentCount++;
+      console.log(`🚨 TOP SIGNAL SENT: ${item.symbol} | score=${item.score}`);
+    } catch (err) {
+      console.log(`send error: ${item.symbol} ${err.message}`);
+    }
   }
 
   return sentCount;
