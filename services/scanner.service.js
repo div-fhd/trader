@@ -42,7 +42,7 @@ function isMissedSignal(signal, currentPrice) {
 }
 
 function isPriceNearEntry(signal, currentPrice) {
-  const threshold = 0.02; // 2%
+  const threshold = 0.02;
 
   if (signal.direction === "LONG") {
     const distance = (signal.entryMin - currentPrice) / signal.entryMin;
@@ -163,18 +163,27 @@ async function scanMarket(limit = 3, sessionKey = null, options = {}) {
         summary: item.signal.summary,
         status: "SENT",
         currentPrice: item.indicators.currentClose,
+        score: item.score,
+        rr: item.rr,
         entryAlertSent: false,
         tp1Hit: false,
         tp2Hit: false,
         tp3Hit: false,
-        stopLossHit: false
+        stopLossHit: false,
+        entryHitAt: null,
+        tp1HitAt: null,
+        tp2HitAt: null,
+        tp3HitAt: null,
+        stopLossHitAt: null
       });
 
-      await telegram.sendSignal({
-        ...newSignal.toObject(),
-        score: item.score,
-        rr: item.rr
-      });
+      const sentMessage = await telegram.sendSignal(newSignal.toObject());
+
+      if (sentMessage) {
+        newSignal.telegramMessageId = sentMessage.message_id;
+        newSignal.telegramChatId = String(sentMessage.chat.id);
+        await newSignal.save();
+      }
 
       sentCount++;
       console.log(`🚨 TOP SIGNAL SENT: ${item.symbol} | score=${item.score}`);

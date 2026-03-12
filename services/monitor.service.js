@@ -32,6 +32,7 @@ async function markEntryIfNeeded(signal, candle) {
   signal.entryAlertSent = true;
   signal.status = "ENTRY_HIT";
   signal.currentPrice = candle.close;
+  signal.entryHitAt = new Date();
   await signal.save();
 
   await telegram.sendEntryAlert(signal, candle.close);
@@ -56,21 +57,19 @@ async function monitorSignals() {
         `🔍 ${signal.symbol} | status=${signal.status} | close=${candle.close} | high=${candle.high} | low=${candle.low} | entry=${signal.entryMin}-${signal.entryMax}`
       );
 
-      // دخول فعلي فقط عند لمس منطقة الدخول
       await markEntryIfNeeded(signal, candle);
 
-      // لا نكمل إذا الدخول لم يتحقق
       if (!signal.entryAlertSent) {
         await signal.save();
         continue;
       }
 
-      // LONG
       if (signal.direction === "LONG") {
         if (!signal.tp1Hit && candle.high >= signal.targets[0]) {
           signal.tp1Hit = true;
           signal.status = "TP1_HIT";
           signal.currentPrice = candle.close;
+          signal.tp1HitAt = new Date();
           await signal.save();
 
           await telegram.sendTp1Alert(signal, candle.close);
@@ -82,6 +81,7 @@ async function monitorSignals() {
           signal.tp2Hit = true;
           signal.status = "TP2_HIT";
           signal.currentPrice = candle.close;
+          signal.tp2HitAt = new Date();
           await signal.save();
 
           await telegram.sendTp2Alert(signal, candle.close);
@@ -93,6 +93,7 @@ async function monitorSignals() {
           signal.tp3Hit = true;
           signal.status = "CLOSED";
           signal.currentPrice = candle.close;
+          signal.tp3HitAt = new Date();
           await signal.save();
 
           await telegram.sendTp3Alert(signal, candle.close);
@@ -104,6 +105,7 @@ async function monitorSignals() {
           signal.stopLossHit = true;
           signal.status = "STOPPED";
           signal.currentPrice = candle.close;
+          signal.stopLossHitAt = new Date();
           await signal.save();
 
           await telegram.sendStopLossAlert(signal, candle.close);
@@ -112,12 +114,12 @@ async function monitorSignals() {
         }
       }
 
-      // SHORT
       if (signal.direction === "SHORT") {
         if (!signal.tp1Hit && candle.low <= signal.targets[0]) {
           signal.tp1Hit = true;
           signal.status = "TP1_HIT";
           signal.currentPrice = candle.close;
+          signal.tp1HitAt = new Date();
           await signal.save();
 
           await telegram.sendTp1Alert(signal, candle.close);
@@ -129,6 +131,7 @@ async function monitorSignals() {
           signal.tp2Hit = true;
           signal.status = "TP2_HIT";
           signal.currentPrice = candle.close;
+          signal.tp2HitAt = new Date();
           await signal.save();
 
           await telegram.sendTp2Alert(signal, candle.close);
@@ -140,6 +143,7 @@ async function monitorSignals() {
           signal.tp3Hit = true;
           signal.status = "CLOSED";
           signal.currentPrice = candle.close;
+          signal.tp3HitAt = new Date();
           await signal.save();
 
           await telegram.sendTp3Alert(signal, candle.close);
@@ -151,6 +155,7 @@ async function monitorSignals() {
           signal.stopLossHit = true;
           signal.status = "STOPPED";
           signal.currentPrice = candle.close;
+          signal.stopLossHitAt = new Date();
           await signal.save();
 
           await telegram.sendStopLossAlert(signal, candle.close);

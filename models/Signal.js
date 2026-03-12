@@ -16,6 +16,9 @@ const SignalSchema = new mongoose.Schema(
     confidence: { type: Number, default: 0 },
     summary: { type: String, default: "" },
 
+    score: { type: Number, default: null },
+    rr: { type: Number, default: null },
+
     status: {
       type: String,
       default: "NEW"
@@ -28,7 +31,18 @@ const SignalSchema = new mongoose.Schema(
     tp3Hit: { type: Boolean, default: false },
     stopLossHit: { type: Boolean, default: false },
 
-    currentPrice: { type: Number, default: null }
+    currentPrice: { type: Number, default: null },
+
+    // Telegram
+    telegramMessageId: { type: Number, default: null },
+    telegramChatId: { type: String, default: null },
+
+    // timestamps للأحداث
+    entryHitAt: { type: Date, default: null },
+    tp1HitAt: { type: Date, default: null },
+    tp2HitAt: { type: Date, default: null },
+    tp3HitAt: { type: Date, default: null },
+    stopLossHitAt: { type: Date, default: null }
   },
   { timestamps: true }
 );

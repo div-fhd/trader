@@ -1,5 +1,6 @@
 const scanner = require("./scanner.service");
 const telegram = require("./telegram.service");
+const Signal = require("../models/Signal");
 
 let manualScanRunning = false;
 
@@ -41,32 +42,29 @@ function startTelegramBot() {
         } finally {
           manualScanRunning = false;
         }
+
+        return;
       }
+
       if (text === "📊 الصفقات المفتوحة") {
-  const Signal = require("../models/Signal");
+        const signals = await Signal.find({
+          status: { $in: ["SENT", "ENTRY_HIT", "TP1_HIT", "TP2_HIT"] }
+        }).sort({ createdAt: -1 });
 
-  const signals = await Signal.find({
-    status: { $in: ["SENT", "ENTRY_HIT", "TP1_HIT", "TP2_HIT"] }
-  });
+        if (!signals.length) {
+          await telegram.bot.sendMessage(chatId, "📭 لا توجد صفقات مفتوحة.");
+          return;
+        }
 
-  if (!signals.length) {
-    await telegram.bot.sendMessage(chatId, "لا توجد صفقات مفتوحة.");
-    return;
-  }
+        for (const s of signals) {
+          const message = telegram.buildSignalMessage(s);
+          await telegram.bot.sendMessage(chatId, message, {
+            parse_mode: "HTML"
+          });
+        }
 
-    for (const s of signals) {
-      await telegram.bot.sendMessage(chatId, `
-  🪙 ${s.symbol}
-  📈 ${s.direction}
-  📊 Status: ${s.status}
-  💰 Entry: ${s.entryMin} - ${s.entryMax}
-  🎯 TP1: ${s.targets[0]}
-  🎯 TP2: ${s.targets[1]}
-  🎯 TP3: ${s.targets[2]}
-  🛑 SL: ${s.stopLoss}
-  `);
-    }
-  }
+        return;
+      }
     } catch (err) {
       manualScanRunning = false;
       console.log("telegram bot error:", err.message);

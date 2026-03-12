@@ -1,127 +1,152 @@
 const TelegramBot = require("node-telegram-bot-api");
 
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN,{polling: true});
- 
-async function sendMessage(message) {
-  return bot.sendMessage(process.env.TELEGRAM_CHAT_ID, message);
+const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
-async function sendSignal(signal) {
-  const message = `
-🚨 AI FUTURES SIGNAL
+function formatDateTime(dateValue) {
+  if (!dateValue) return "—";
 
-🪙 Coin: ${signal.symbol}
-📈 Direction: ${signal.direction}
+  const d = new Date(dateValue);
 
-💰 Entry Zone:
-${signal.entryMin} - ${signal.entryMax}
+  if (Number.isNaN(d.getTime())) return "—";
 
-🛑 Stop Loss:
-${signal.stopLoss}
-
-🎯 Targets:
-TP1: ${signal.targets[0]}
-TP2: ${signal.targets[1]}
-TP3: ${signal.targets[2]}
-
-📊 Confidence:
-${signal.confidence}%
-
-🏆 Score:
-${signal.score ?? "N/A"}
-
-⚖️ RR:
-${signal.rr ? signal.rr.toFixed(2) : "N/A"}
-
-🧠 Analysis:
-${signal.summary}
-`;
-
-  await sendMessage(message);
+  return d.toLocaleString("en-GB", {
+    timeZone: "Asia/Hebron",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  });
 }
 
-async function sendEntryAlert(signal, currentPrice) {
-  const message = `
-📡 ENTRY ALERT
+function formatTarget(label, value, hit, hitAt) {
+  const safeValue = escapeHtml(value);
 
-🪙 Coin: ${signal.symbol}
-📈 Direction: ${signal.direction}
+  if (hit) {
+    return `• <s>${label}: ${safeValue}</s> ✅ ${formatDateTime(hitAt)}`;
+  }
 
-💰 Entry Zone:
-${signal.entryMin} - ${signal.entryMax}
-
-💵 Current Price:
-${currentPrice}
-
-👀 Price has entered the entry zone.
-Manual entry decision required.
-`;
-
-  await sendMessage(message);
+  return `• ${label}: <b>${safeValue}</b>`;
 }
 
-async function sendTp1Alert(signal, currentPrice) {
-  const message = `
-🎯 TARGET 1 HIT
-
-🪙 Coin: ${signal.symbol}
-📈 Direction: ${signal.direction}
-
-✅ TP1: ${signal.targets[0]}
-💵 Current Price: ${currentPrice}
-
-🔒 Consider protecting the trade.
-`;
-
-  await sendMessage(message);
+function toNum(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
-async function sendTp2Alert(signal, currentPrice) {
-  const message = `
-🚀 TARGET 2 HIT
+function calcPercent(from, to, direction) {
+  const a = toNum(from);
+  const b = toNum(to);
 
-🪙 Coin: ${signal.symbol}
-📈 Direction: ${signal.direction}
+  if (!a || !b) return null;
 
-✅ TP2: ${signal.targets[1]}
-💵 Current Price: ${currentPrice}
-`;
+  if (direction === "LONG") {
+    return ((b - a) / a) * 100;
+  }
 
-  await sendMessage(message);
+  if (direction === "SHORT") {
+    return ((a - b) / a) * 100;
+  }
+
+  return null;
 }
 
-async function sendTp3Alert(signal, currentPrice) {
-  const message = `
-🏁 TARGET 3 HIT
-
-🪙 Coin: ${signal.symbol}
-📈 Direction: ${signal.direction}
-
-✅ TP3: ${signal.targets[2]}
-💵 Current Price: ${currentPrice}
-
-🎉 Full target reached.
-`;
-
-  await sendMessage(message);
+function formatPct(value) {
+  if (value === null || value === undefined) return "—";
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
-async function sendStopLossAlert(signal, currentPrice) {
-  const message = `
-❌ STOP LOSS HIT
+function buildProgressLine(signal) {
+  const entry = signal.entryAlertSent ? "✅" : "⏳";
+  const tp1 = signal.tp1Hit ? "✅" : "⏳";
+  const tp2 = signal.tp2Hit ? "✅" : "⏳";
+  const tp3 = signal.tp3Hit ? "✅" : "⏳";
+  const sl = signal.stopLossHit ? "❌" : "⏳";
 
-🪙 Coin: ${signal.symbol}
-📈 Direction: ${signal.direction}
-
-🛑 Stop Loss: ${signal.stopLoss}
-💵 Current Price: ${currentPrice}
-`;
-
-  await sendMessage(message);
+  return `📍 <b>Progress:</b> ENTRY ${entry} | TP1 ${tp1} | TP2 ${tp2} | TP3 ${tp3} | SL ${sl}`;
 }
-async function sendMessage(message) {
+
+function buildSignalMessage(signal) {
+  const statusMap = {
+    SENT: "Waiting Entry",
+    ENTRY_HIT: "Entry Hit",
+    TP1_HIT: "TP1 Hit",
+    TP2_HIT: "TP2 Hit",
+    CLOSED: "Closed",
+    STOPPED: "Stopped"
+  };
+
+  const statusText = statusMap[signal.status] || signal.status || "Unknown";
+
+  const entryRef =
+    signal.direction === "LONG"
+      ? signal.entryMax
+      : signal.entryMin;
+
+  const riskPct = calcPercent(entryRef, signal.stopLoss, signal.direction);
+  const tp1Pct = calcPercent(entryRef, signal.targets?.[0], signal.direction);
+  const tp2Pct = calcPercent(entryRef, signal.targets?.[1], signal.direction);
+  const tp3Pct = calcPercent(entryRef, signal.targets?.[2], signal.direction);
+
+  return `
+🚨 <b>AI FUTURES SIGNAL</b>
+
+🪙 <b>Coin:</b> ${escapeHtml(signal.symbol)}
+📈 <b>Direction:</b> ${escapeHtml(signal.direction)}
+📌 <b>Status:</b> <b>${escapeHtml(statusText)}</b>
+${buildProgressLine(signal)}
+
+🕒 <b>Created:</b> ${formatDateTime(signal.createdAt)}
+
+💰 <b>Entry Zone:</b> <b>${escapeHtml(signal.entryMin)} — ${escapeHtml(signal.entryMax)}</b>
+🛑 <b>Stop Loss:</b> <b>${escapeHtml(signal.stopLoss)}</b>
+💵 <b>Current Price:</b> <b>${escapeHtml(signal.currentPrice ?? "N/A")}</b>
+
+🎯 <b>Targets:</b>
+${formatTarget("TP1", signal.targets?.[0], signal.tp1Hit, signal.tp1HitAt)}
+${formatTarget("TP2", signal.targets?.[1], signal.tp2Hit, signal.tp2HitAt)}
+${formatTarget("TP3", signal.targets?.[2], signal.tp3Hit, signal.tp3HitAt)}
+
+📊 <b>Confidence:</b> <b>${escapeHtml(signal.confidence)}%</b>
+🏆 <b>Score:</b> <b>${escapeHtml(signal.score ?? "N/A")}</b>
+⚖️ <b>RR:</b> <b>${escapeHtml(signal.rr ? signal.rr.toFixed(2) : "N/A")}</b>
+
+📐 <b>Move %:</b>
+• <b>Risk:</b> ${formatPct(riskPct)}
+• <b>TP1:</b> ${formatPct(tp1Pct)}
+• <b>TP2:</b> ${formatPct(tp2Pct)}
+• <b>TP3:</b> ${formatPct(tp3Pct)}
+
+🧠 <b>Analysis:</b>
+${escapeHtml(signal.summary)}
+
+🕒 <b>Entry Hit:</b> ${formatDateTime(signal.entryHitAt)}
+🕒 <b>TP1 Hit:</b> ${formatDateTime(signal.tp1HitAt)}
+🕒 <b>TP2 Hit:</b> ${formatDateTime(signal.tp2HitAt)}
+🕒 <b>TP3 Hit:</b> ${formatDateTime(signal.tp3HitAt)}
+🕒 <b>SL Hit:</b> ${formatDateTime(signal.stopLossHitAt)}
+`.trim();
+}
+
+async function sendMessage(message, options = {}) {
   try {
-    const result = await bot.sendMessage(process.env.TELEGRAM_CHAT_ID, message);
+    const result = await bot.sendMessage(
+      process.env.TELEGRAM_CHAT_ID,
+      message,
+      {
+        parse_mode: "HTML",
+        ...options
+      }
+    );
+
     console.log("📬 Telegram message sent");
     return result;
   } catch (error) {
@@ -129,32 +154,86 @@ async function sendMessage(message) {
     throw error;
   }
 }
- 
+
+async function sendSignal(signal) {
+  const message = buildSignalMessage(signal);
+  return sendMessage(message);
+}
+
+async function updateSignalMessage(signal) {
+  if (!signal.telegramMessageId || !signal.telegramChatId) {
+    console.log(`⚠️ Missing telegram message info for ${signal.symbol}`);
+    return null;
+  }
+
+  const message = buildSignalMessage(signal);
+
+  try {
+    const result = await bot.editMessageText(message, {
+      chat_id: signal.telegramChatId,
+      message_id: signal.telegramMessageId,
+      parse_mode: "HTML"
+    });
+
+    console.log(`✏️ Telegram message updated: ${signal.symbol}`);
+    return result;
+  } catch (error) {
+    console.log("❌ Telegram edit error:", error.message);
+    throw error;
+  }
+}
+
+async function sendEntryAlert(signal, currentPrice) {
+  signal.currentPrice = currentPrice;
+  return updateSignalMessage(signal);
+}
+
+async function sendTp1Alert(signal, currentPrice) {
+  signal.currentPrice = currentPrice;
+  return updateSignalMessage(signal);
+}
+
+async function sendTp2Alert(signal, currentPrice) {
+  signal.currentPrice = currentPrice;
+  return updateSignalMessage(signal);
+}
+
+async function sendTp3Alert(signal, currentPrice) {
+  signal.currentPrice = currentPrice;
+  return updateSignalMessage(signal);
+}
+
+async function sendStopLossAlert(signal, currentPrice) {
+  signal.currentPrice = currentPrice;
+  return updateSignalMessage(signal);
+}
+
 async function sendMainMenu() {
   return bot.sendMessage(
     process.env.TELEGRAM_CHAT_ID,
     "تم تفعيل لوحة التحكم ✅",
     {
       reply_markup: {
-      keyboard: [
-        [{ text: "📡 فحص السوق الآن" }],
-        [{ text: "📊 الصفقات المفتوحة" }]
-      ],
-      resize_keyboard: true
-    }
+        keyboard: [
+          [{ text: "📡 فحص السوق الآن" }],
+          [{ text: "📊 الصفقات المفتوحة" }]
+        ],
+        resize_keyboard: true
+      }
     }
   );
 }
 
- 
 module.exports = {
   bot,
   sendSignal,
+  updateSignalMessage,
   sendMessage,
   sendEntryAlert,
   sendTp1Alert,
   sendTp2Alert,
   sendTp3Alert,
   sendStopLossAlert,
-  sendMainMenu
+  sendMainMenu,
+  buildSignalMessage
 };
