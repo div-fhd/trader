@@ -95,14 +95,15 @@ function buildSignalMessage(signal) {
   const tp1Pct = calcPercent(entryRef, signal.targets?.[0], signal.direction);
   const tp2Pct = calcPercent(entryRef, signal.targets?.[1], signal.direction);
   const tp3Pct = calcPercent(entryRef, signal.targets?.[2], signal.direction);
+  
+// 📌 <b>Status:</b> <b>${escapeHtml(statusText)}</b>
+// ${buildProgressLine(signal)}
 
   return `
 🚨 <b>AI FUTURES SIGNAL</b>
 
 🪙 <b>Coin:</b> ${escapeHtml(signal.symbol)}
 📈 <b>Direction:</b> ${escapeHtml(signal.direction)}
-📌 <b>Status:</b> <b>${escapeHtml(statusText)}</b>
-${buildProgressLine(signal)}
 
 🕒 <b>Created:</b> ${formatDateTime(signal.createdAt)}
 
