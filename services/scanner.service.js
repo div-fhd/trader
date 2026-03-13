@@ -42,7 +42,7 @@ function isMissedSignal(signal, currentPrice) {
 }
 
 function isPriceNearEntry(signal, currentPrice) {
-  const threshold = 0.02;
+  const threshold = 0.05; // 5%
 
   if (signal.direction === "LONG") {
     const distance = (signal.entryMin - currentPrice) / signal.entryMin;
@@ -105,12 +105,12 @@ async function scanMarket(limit = 3, sessionKey = null, options = {}) {
 
       const { score, rr } = calculateSignalScore(signal, indicators);
 
-      if (!score || score < 70) {
+      if (!score || score < 60) {
         console.log(`🏚️ Weak score ${symbol} | score=${score}`);
         continue;
       }
 
-      if (!rr || rr < 1.5) {
+      if (!rr || rr < 1.2) {
         console.log(`⚠️ Weak RR ${symbol} | rr=${rr}`);
         continue;
       }
