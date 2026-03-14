@@ -98,22 +98,22 @@ async function scanMarket(limit = 3, sessionKey = null, options = {}) {
         continue;
       }
 
-      if (!isPriceNearEntry(signal, indicators.currentClose)) {
-        console.log(`📏 Price too far from entry ${symbol}`);
-        continue;
-      }
+      // if (!isPriceNearEntry(signal, indicators.currentClose)) {
+      //   console.log(`📏 Price too far from entry ${symbol}`);
+      //   continue;
+      // }
 
-      const { score, rr } = calculateSignalScore(signal, indicators);
+      // const { score, rr } = calculateSignalScore(signal, indicators);
 
-      if (!score || score < 60) {
-        console.log(`🏚️ Weak score ${symbol} | score=${score}`);
-        continue;
-      }
+      // if (!score || score < 60) {
+      //   console.log(`🏚️ Weak score ${symbol} | score=${score}`);
+      //   continue;
+      // }
 
-      if (!rr || rr < 1.2) {
-        console.log(`⚠️ Weak RR ${symbol} | rr=${rr}`);
-        continue;
-      }
+      // if (!rr || rr < 1.2) {
+      //   console.log(`⚠️ Weak RR ${symbol} | rr=${rr}`);
+      //   continue;
+      // }
 
       candidateSignals.push({
         symbol,
