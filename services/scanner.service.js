@@ -5,6 +5,7 @@ const telegram = require("./telegram.service");
 const Signal = require("../models/Signal");
 const symbols = require("../utils/symbols");
 const { calculateSignalScore } = require("./scoring.service");
+const limiter = require("../utils/dailyLimiter");
 
 function passesPreFilter(indicators) {
   if (
@@ -29,36 +30,8 @@ function passesPreFilter(indicators) {
   return true;
 }
 
-function isMissedSignal(signal, currentPrice) {
-  if (signal.direction === "LONG" && currentPrice > signal.entryMax) {
-    return true;
-  }
-
-  if (signal.direction === "SHORT" && currentPrice < signal.entryMin) {
-    return true;
-  }
-
-  return false;
-}
-
-function isPriceNearEntry(signal, currentPrice) {
-  const threshold = 0.05; // 5%
-
-  if (signal.direction === "LONG") {
-    const distance = (signal.entryMin - currentPrice) / signal.entryMin;
-    return distance <= threshold;
-  }
-
-  if (signal.direction === "SHORT") {
-    const distance = (currentPrice - signal.entryMax) / signal.entryMax;
-    return distance <= threshold;
-  }
-
-  return true;
-}
-
 async function scanMarket(limit = 3, sessionKey = null, options = {}) {
-  console.log("🔎 Scanning market...");
+  console.log(`🔎 Scanning market...`);
 
   const candidateSignals = [];
 
@@ -93,27 +66,7 @@ async function scanMarket(limit = 3, sessionKey = null, options = {}) {
         continue;
       }
 
-      // if (isMissedSignal(signal, indicators.currentClose)) {
-      //   console.log(`⌛ Missed signal ${symbol}, current price already passed entry zone`);
-      //   continue;
-      // }
-
-      // if (!isPriceNearEntry(signal, indicators.currentClose)) {
-      //   console.log(`📏 Price too far from entry ${symbol}`);
-      //   continue;
-      // }
-
-      // const { score, rr } = calculateSignalScore(signal, indicators);
-
-      // if (!score || score < 60) {
-      //   console.log(`🏚️ Weak score ${symbol} | score=${score}`);
-      //   continue;
-      // }
-
-      // if (!rr || rr < 1.2) {
-      //   console.log(`⚠️ Weak RR ${symbol} | rr=${rr}`);
-      //   continue;
-      // }
+      const { score, rr } = calculateSignalScore(signal, indicators);
 
       candidateSignals.push({
         symbol,
